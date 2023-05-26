@@ -1,7 +1,7 @@
 const { Telegraf, Composer, session, Scenes } = require("telegraf");
 // const { Sequelize } = require("sequelize");
 const cron = require("node-cron");
-
+const fs = require("fs");
 const dotenv = require("dotenv");
 
 dotenv.config({});
@@ -11,13 +11,13 @@ const dbUrl = process.env.DB;
 const password = process.env.DB_PASS;
 
 const connect = require("./model/index.js");
+const Message = require("./model/user.js");
 
 const bot = new Telegraf(TOKEN);
 
 const newWizart = new Composer();
-newWizart.on("text", async (ctx) => {
-  ctx.reply("Xabar muvaffaqiyatli yuborildi");
-  return ctx.scene.leave();
+newWizart.action("call", async (ctx) => {
+  ctx.reply("Foydalanuvchilar ro'yhati");
 });
 exports.newWizart = newWizart;
 
@@ -40,29 +40,34 @@ bot.catch((error, ctx) => {
     ctx.telegram.sendMessage(id, "Xatolik yuz berdi /start ni bosing ");
   }
 });
-cron.schedule("0 * * * *", () => {
-  // Bu qismda har soatda bajarilishi kerak bo'lgan vazifalarni yozing
-});
+
+
 
 exports.bot = bot;
 
 const start = async () => {
-  const changeStream = await connect(dbUrl, password);
-  changeStream.on("change", (change) => {
+  const data = await connect(dbUrl, password);
+  const changeStream = data.changeStream;
+  const db = data.db;
+  changeStream.on("change", async (change) => {
     if (change.operationType === "insert") {
-      const newElement = change.fullDocument;
-      console.log("New element inserted:", newElement);
-      const id = newElement?.id;
-      const name = newElement?.name;
-      const email = newElement?.email;
-      const phone = newElement?.phone;
-      const message = newElement?.message;
+      const newData = change.fullDocument;
+      console.log("New element inserted:", newData);
+      const id = newData?.id;
+      const name = newData?.name;
+      const email = newData?.emailOrPhone;
 
-      const text = `Yangi xabar keldi\n\nIsmi: ${name}\nEmail: ${email}\nTelefon raqami: ${phone}\nXabari: ${message}`;
-      bot.telegram.sendMessage("6201463713", text);
+      const message = newData?.message;
+      const count = await db.db().collection("messages").countDocuments();
+      console.log(count);
+      const text = `<b>🔔 New Message</b>\n\n <b>📌 Application Number:</b> #${count}\n\n ****************\n<b>Name</b>: ${name}\n<b>Email-Phone</b>: ${email}\n<b>Message</b>: ${message}`;
+      bot.telegram.sendMessage("-1001671077929", text, {
+        parse_mode: "HTML",
+      });
     }
   });
   console.log("Bot is running");
+
   bot.launch();
 };
 
